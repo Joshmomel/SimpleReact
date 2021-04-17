@@ -89,11 +89,35 @@ function updateDom(dom, prevProps, nextProps) {
     })
 }
 
+const destroyEffects = (effectList) =>
+  effectList
+    .filter((hook) => hook.tag === "effect" && hook.destroy)
+    .forEach((hook) => {
+      hook.destroy();
+      hook.destroy = undefined;
+    });
+
+const runEffects = (effectList) =>
+  effectList
+    .filter((hook) => hook.tag === "effect" && hook.create)
+    .forEach((hook) => (hook.destroy = hook.create()));
+
 function commitRoot() {
-  deletions.forEach(commitWork)
-  commitWork(wipRoot.child)
-  currentRoot = wipRoot
-  wipRoot = null
+  const effects = wipRoot.child.hooks;
+
+  if (effects) {
+    destroyEffects(effects);
+  }
+
+  deletions.forEach(commitWork);
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+
+  if (effects) {
+    runEffects(effects);
+  }
+
+  wipRoot = null;
 }
 
 function commitWork(fiber) {
@@ -234,6 +258,31 @@ function useState(initial) {
   return [hook.state, setState]
 }
 
+const hasDepsChanged = (prevDeps, nextDeps) =>
+  !prevDeps ||
+  !nextDeps ||
+  prevDeps.length !== nextDeps.length ||
+  prevDeps.some((dep, index) => dep !== nextDeps[index]);
+
+function useEffect(effectCallback, deps) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hasChanged = hasDepsChanged(oldHook ? oldHook.deps : undefined, deps);
+
+  const hook = {
+    tag: "effect",
+    create: hasChanged ? effectCallback : null,
+    destroy: oldHook && oldHook.destroy ? oldHook.destroy : undefined,
+    deps,
+  };
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+}
+
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber)
@@ -303,6 +352,7 @@ const Didact = {
   createElement,
   render,
   useState,
+  useEffect,
 }
 
 /** @jsx Didact.createElement */
