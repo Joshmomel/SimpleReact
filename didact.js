@@ -283,6 +283,45 @@ function useEffect(effectCallback, deps) {
   hookIndex++;
 }
 
+function useCallback(callbackFn, deps) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hasChanged = hasDepsChanged(oldHook ? oldHook.deps : undefined, deps);
+
+  const hook = {
+    tag: "useCallback",
+    callbackFn,
+    deps,
+  };
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return hasChanged ? callbackFn : oldHook.callbackFn;
+}
+
+function useMemo(callbackFn, deps) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hasChanged = hasDepsChanged(oldHook ? oldHook.deps : undefined, deps);
+  const value = hasChanged ? callbackFn() : oldHook.value;
+
+  const hook = {
+    tag: "useMemo",
+    value,
+    deps,
+  };
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return value;
+}
+
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber)
@@ -353,6 +392,8 @@ const Didact = {
   render,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
 }
 
 /** @jsx Didact.createElement */
